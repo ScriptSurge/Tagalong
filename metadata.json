@@ -1,0 +1,6 @@
+{
+  "name": "Tagalong",
+  "description": "Hyper-local spontaneous activity discovery & hosting app. Find and join real in-person activities happening in the next 0-48 hours.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

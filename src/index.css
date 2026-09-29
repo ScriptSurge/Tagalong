@@ -1,0 +1,122 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --font-display: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background-color: #f8f7f5;
+    color: #111827;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
+    letter-spacing: -0.01em;
+  }
+}
+
+.font-display {
+  font-family: var(--font-display);
+  letter-spacing: -0.025em;
+}
+
+/* Warm, Inviting Premium Social & Dating Tokens */
+.bg-canvas {
+  background-color: #f8f7f5;
+}
+
+.bg-canvas-card {
+  background-color: #ffffff;
+}
+
+.bg-accent-coral {
+  background-color: #ff4b63;
+}
+
+.text-accent-coral {
+  color: #ff4b63;
+}
+
+/* Modern smooth scrollbars */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #d8d4c7;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #bab4a3;
+}
+
+/* Hide scrollbar for clean horizontal carousels */
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Frosted Glass & Luxury Tokens */
+.glass-pill {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.glass-dock {
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  box-shadow: 0 16px 40px -10px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.04);
+}
+
+.glass-dark {
+  background: rgba(18, 22, 25, 0.88);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+/* Refined Editorial Shadows */
+.shadow-card-subtle {
+  box-shadow: 0 8px 30px -4px rgba(0, 0, 0, 0.04), 0 2px 8px -2px rgba(0, 0, 0, 0.02);
+}
+
+.shadow-card-hover {
+  box-shadow: 0 20px 40px -8px rgba(0, 0, 0, 0.08), 0 4px 12px -2px rgba(0, 0, 0, 0.03);
+}
+
+.shadow-dock {
+  box-shadow: 0 20px 50px -10px rgba(25, 30, 20, 0.18), 0 4px 16px rgba(0, 0, 0, 0.04);
+}
+
+@keyframes pulse-ring {
+  0% { transform: scale(0.92); opacity: 0.8; }
+  50% { transform: scale(1.15); opacity: 0.3; }
+  100% { transform: scale(0.92); opacity: 0.8; }
+}
+
+.animate-pulse-ring {
+  animation: pulse-ring 2.4s infinite cubic-bezier(0.4, 0, 0.6, 1);
+}
+
+@keyframes float-subtle {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-4px); }
+}
+
+.animate-float-subtle {
+  animation: float-subtle 3s ease-in-out infinite;
+}
+
