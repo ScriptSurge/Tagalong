@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Compass, Calendar, MessageSquare, User, Sparkles } from 'lucide-react';
 
 import { PhoneFrame } from './components/PhoneFrame';
@@ -13,6 +13,7 @@ import { ActivityDetailsView } from './components/ActivityDetailsView';
 
 import { User as UserType, Activity, Participant, Message, AppNotification, Report } from './types';
 import { MOCK_USERS, MOCK_ACTIVITIES, MOCK_PARTICIPANTS, MOCK_MESSAGES, MOCK_NOTIFICATIONS } from './data';
+import { ensureSharedData, syncSharedData } from './lib/database';
 
 export default function App() {
   // Pilot Actor switch matching Developer Control Panel
@@ -36,46 +37,81 @@ export default function App() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [reports, setReports] = useState<Report[]>([]);
+  const [users, setUsers] = useState<UserType[]>(MOCK_USERS);
+  const [dataError, setDataError] = useState<string | null>(null);
+  const [sessionReady, setSessionReady] = useState(false);
+  const usersRef = useRef<UserType[]>(MOCK_USERS);
+  const reportsRef = useRef<Report[]>([]);
 
-  // 1. Initial State Load & Storage sync
+  // 1. Load shared data from Supabase. This device only remembers who you are acting as.
   useEffect(() => {
-    // Activities LocalStorage Synchronizer
-    const cachedAct = localStorage.getItem('tagalong_activities');
-    const cachedPart = localStorage.getItem('tagalong_participants');
-    const cachedMsg = localStorage.getItem('tagalong_messages');
-    const cachedNot = localStorage.getItem('tagalong_notifications');
-    const cachedUser = localStorage.getItem('tagalong_current_user');
-    const cachedRoute = localStorage.getItem('tagalong_app_route');
-    const cachedActor = localStorage.getItem('tagalong_actor_id');
+    let cancelled = false;
 
-    if (cachedAct) setActivities(JSON.parse(cachedAct));
-    else setActivities(MOCK_ACTIVITIES);
+    const restoreActor = (directory: UserType[]) => {
+      const cachedRoute = localStorage.getItem('tagalong_app_route');
+      const cachedActor = localStorage.getItem('tagalong_actor_id');
+      const actorId = cachedActor ? JSON.parse(cachedActor) as string : 'user_1';
+      const actor = directory.find(u => u.id === actorId) || directory[0];
+      setActiveActorId(actor?.id || 'user_1');
+      setCurrentUser(actor || null);
+      const storedRoute = cachedRoute ? JSON.parse(cachedRoute) as 'auth' | 'onboarding' | 'main' : 'auth';
+      const route = actor?.acceptedGuidelines && storedRoute === 'auth' ? 'main' : storedRoute;
+      setAppRoute(route);
+    };
 
-    if (cachedPart) setParticipants(JSON.parse(cachedPart));
-    else setParticipants(MOCK_PARTICIPANTS);
+    ensureSharedData()
+      .then((snapshot) => {
+        if (cancelled) return;
+        usersRef.current = snapshot.users;
+        reportsRef.current = snapshot.reports;
+        setUsers(snapshot.users);
+        setActivities(snapshot.activities);
+        setParticipants(snapshot.participants);
+        setMessages(snapshot.messages);
+        setNotifications(snapshot.notifications);
+        setReports(snapshot.reports);
+        setDataError(null);
+        restoreActor(snapshot.users);
+        setSessionReady(true);
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        const message = error instanceof Error ? error.message : 'Could not reach Supabase';
+        const friendly = message.includes('schema cache')
+          ? 'Supabase is connected. Open the SQL editor, run supabase/schema.sql, then refresh.'
+          : message;
+        setDataError(friendly);
+        setActivities(MOCK_ACTIVITIES);
+        setParticipants(MOCK_PARTICIPANTS);
+        setMessages(MOCK_MESSAGES);
+        setNotifications(MOCK_NOTIFICATIONS);
+        restoreActor(MOCK_USERS);
+        setSessionReady(true);
+      });
 
-    if (cachedMsg) setMessages(JSON.parse(cachedMsg));
-    else setMessages(MOCK_MESSAGES);
-
-    if (cachedNot) setNotifications(JSON.parse(cachedNot));
-    else setNotifications(MOCK_NOTIFICATIONS);
-
-    // If user cached, restore routing
-    if (cachedUser && cachedRoute && cachedActor) {
-      const parsedActor = JSON.parse(cachedActor);
-      setActiveActorId(parsedActor);
-      
-      const parsedUser = JSON.parse(cachedUser);
-      setCurrentUser(parsedUser);
-      setAppRoute(JSON.parse(cachedRoute) as any);
-    } else {
-      // Default initial guest profile
-      const defaultGuest = MOCK_USERS.find(u => u.id === 'user_1') || MOCK_USERS[0];
-      setCurrentUser(defaultGuest);
-    }
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  // Sync state to LocalStorage
+  const rememberActor = (updatedRoute: string, updatedActor: string) => {
+    localStorage.setItem('tagalong_app_route', JSON.stringify(updatedRoute));
+    localStorage.setItem('tagalong_actor_id', JSON.stringify(updatedActor));
+  };
+
+  const directoryWith = (updatedUser: UserType | null) => {
+    const directory = usersRef.current;
+    if (!updatedUser) return directory;
+    const exists = directory.some(user => user.id === updatedUser.id);
+    const next = exists
+      ? directory.map(user => user.id === updatedUser.id ? updatedUser : user)
+      : [...directory, updatedUser];
+    usersRef.current = next;
+    setUsers(next);
+    return next;
+  };
+
+  // Shared rows go to Supabase. This browser only remembers the demo actor and screen.
   const saveStateToStorage = (
     updatedAct: Activity[],
     updatedPart: Participant[],
@@ -85,24 +121,26 @@ export default function App() {
     updatedRoute: string,
     updatedActor: string
   ) => {
-    localStorage.setItem('tagalong_activities', JSON.stringify(updatedAct));
-    localStorage.setItem('tagalong_participants', JSON.stringify(updatedPart));
-    localStorage.setItem('tagalong_messages', JSON.stringify(updatedMsg));
-    localStorage.setItem('tagalong_notifications', JSON.stringify(updatedNot));
-    localStorage.setItem('tagalong_app_route', JSON.stringify(updatedRoute));
-    localStorage.setItem('tagalong_actor_id', JSON.stringify(updatedActor));
-    
-    if (updatedUser) {
-      localStorage.setItem('tagalong_current_user', JSON.stringify(updatedUser));
-    } else {
-      localStorage.removeItem('tagalong_current_user');
-    }
+    rememberActor(updatedRoute, updatedActor);
+    const nextUsers = directoryWith(updatedUser);
+    void syncSharedData({
+      users: nextUsers,
+      activities: updatedAct,
+      participants: updatedPart,
+      messages: updatedMsg,
+      notifications: updatedNot,
+      reports: reportsRef.current,
+    }).then(() => setDataError(null))
+      .catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : 'Could not save to Supabase';
+        setDataError(message);
+      });
   };
 
   // 2. Action Handlers for simulation
   const handleSwitchActorUser = (userId: string) => {
     setActiveActorId(userId);
-    const selectedUser = MOCK_USERS.find(u => u.id === userId);
+    const selectedUser = usersRef.current.find(u => u.id === userId);
     if (selectedUser) {
       // If we are resetting Jenny Wilson to complete onboarding
       if (userId === 'user_1' && !currentUser?.acceptedGuidelines) {
@@ -241,7 +279,7 @@ export default function App() {
     });
 
     // Send in-app accepted notification
-    const guestUser = MOCK_USERS.find(u => u.id === guestUserId);
+    const guestUser = usersRef.current.find(u => u.id === guestUserId);
     const act = activities.find(a => a.id === activityId);
     let nextNot = [...notifications];
     if (guestUser && act) {
@@ -384,14 +422,6 @@ export default function App() {
     if (!currentUser) return;
     const nextPremiumState = !currentUser.isPremium;
     const updatedUser = { ...currentUser, isPremium: nextPremiumState };
-    
-    // Also update statistics in the initial lists so other user switch scopes notice
-    MOCK_USERS.forEach((u) => {
-      if (u.id === currentUser.id) {
-        u.isPremium = nextPremiumState;
-      }
-    });
-
     setCurrentUser(updatedUser);
     saveStateToStorage(activities, participants, messages, notifications, updatedUser, 'main', activeActorId);
   };
@@ -409,8 +439,14 @@ export default function App() {
   };
 
   const handleResetAppAll = () => {
-    localStorage.clear();
+    localStorage.removeItem('tagalong_app_route');
+    localStorage.removeItem('tagalong_actor_id');
     const defaultUser = { ...MOCK_USERS[0], acceptedGuidelines: false };
+    const resetDirectory = MOCK_USERS.map(user => user.id === defaultUser.id ? defaultUser : user);
+    usersRef.current = resetDirectory;
+    reportsRef.current = [];
+    setUsers(resetDirectory);
+    setReports([]);
     setCurrentUser(defaultUser);
     setActiveActorId('user_1');
     setActivities(MOCK_ACTIVITIES);
@@ -431,7 +467,22 @@ export default function App() {
       details: reportData.details || '',
       createdAt: new Date().toISOString()
     };
-    setReports([...reports, brandReport]);
+    const nextReports = [...reportsRef.current, brandReport];
+    reportsRef.current = nextReports;
+    setReports(nextReports);
+    if (currentUser) {
+      void syncSharedData({
+        users: usersRef.current,
+        activities,
+        participants,
+        messages,
+        notifications,
+        reports: nextReports,
+      }).catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : 'Could not save report';
+        setDataError(message);
+      });
+    }
   };
 
   const handleBlockListReset = () => {
@@ -451,20 +502,31 @@ export default function App() {
   return (
     <PhoneFrame
       activeUserId={activeActorId}
+      actorName={currentUser?.name}
+      actorPhoto={currentUser?.photo}
       onSwitchUser={handleSwitchActorUser}
       isPremium={currentUser?.isPremium || false}
       onTogglePremium={handleTogglePremiumGlobal}
       onResetApp={handleResetAppAll}
       currentScreen={appRoute === 'main' ? activeTab : appRoute}
     >
-      
-      {/* 1. INITIAL PHONE AUTH/SMS GATEWAY */}
-      {appRoute === 'auth' && (
+      {!sessionReady ? (
+        <div className="flex-1 flex items-center justify-center text-xs font-semibold text-stone-400">
+          Loading your profile…
+        </div>
+      ) : null}
+      {sessionReady && dataError && (
+        <div className="absolute top-2 left-3 right-3 z-[60] rounded-xl bg-amber-50 border border-amber-200 px-3 py-2 text-[10px] font-semibold text-amber-900 leading-snug">
+          {dataError}
+        </div>
+      )}
+
+      {sessionReady && appRoute === 'auth' && (
         <SplashView onCompleteAuth={handleCompletePhoneAuth} />
       )}
 
       {/* 2. REGISTRATION/WELCOME ONBOARDING */}
-      {appRoute === 'onboarding' && (
+      {sessionReady && appRoute === 'onboarding' && (
         <OnboardingFlow 
           initialPhoneNumber={currentUser?.phoneNumber || '+1 (604) 555-0199'}
           onSetUserAndComplete={handleCompleteOnboarding}
@@ -472,7 +534,7 @@ export default function App() {
       )}
 
       {/* 3. CORE ADOPTED WEB SHELL SYSTEM */}
-      {appRoute === 'main' && currentUser && (
+      {sessionReady && appRoute === 'main' && currentUser && (
         
         <div id="main-client-shell" className="flex-1 flex flex-col h-full overflow-hidden relative">
           
@@ -481,7 +543,7 @@ export default function App() {
             <ChatRoomView 
               activityId={currentChatRoomId}
               activities={activities}
-              users={MOCK_USERS}
+              users={users}
               messages={messages}
               currentUser={currentUser}
               onSendMessage={handleSendMessage}
@@ -491,7 +553,7 @@ export default function App() {
             <ActivityDetailsView
               activity={currentDetailsActivity}
               currentUser={currentUser}
-              users={MOCK_USERS}
+              users={users}
               participants={participants}
               onJoinRequest={(actId, note) => {
                 handleJoinRequested(actId, note);
@@ -519,7 +581,7 @@ export default function App() {
               {activeTab === 'discover' && (
                 <DiscoverView 
                   activities={activities}
-                  users={MOCK_USERS}
+                  users={users}
                   participants={participants}
                   currentUser={currentUser}
                   onJoinRequest={handleJoinRequested}
@@ -534,7 +596,7 @@ export default function App() {
                 <MyActivitiesView 
                   currentUser={currentUser}
                   activities={activities}
-                  users={MOCK_USERS}
+                  users={users}
                   participants={participants}
                   onApproveParticipant={handleApproveParticipant}
                   onDeclineParticipant={handleDeclineParticipant}
