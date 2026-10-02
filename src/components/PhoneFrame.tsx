@@ -4,6 +4,8 @@ import { Smartphone, Monitor, RefreshCw, Sparkles, User, ChevronDown, Check } fr
 interface PhoneFrameProps {
   children: React.ReactNode;
   activeUserId: string;
+  actorName?: string;
+  actorPhoto?: string;
   onSwitchUser: (userId: string) => void;
   isPremium: boolean;
   onTogglePremium: () => void;
@@ -14,6 +16,8 @@ interface PhoneFrameProps {
 export const PhoneFrame: React.FC<PhoneFrameProps> = ({
   children,
   activeUserId,
+  actorName,
+  actorPhoto,
   onSwitchUser,
   isPremium,
   onTogglePremium,
@@ -59,7 +63,16 @@ export const PhoneFrame: React.FC<PhoneFrameProps> = ({
     }
   ];
 
-  const currentUser = users.find(u => u.id === activeUserId) || users[0];
+  const personas = users.map(user => (
+    user.id === activeUserId && actorName
+      ? { ...user, name: actorName, photo: actorPhoto || user.photo }
+      : user
+  ));
+  const knownPersona = personas.find(user => user.id === activeUserId);
+  const currentUser = knownPersona || (actorName
+    ? { id: activeUserId, name: actorName, role: 'You', photo: actorPhoto || '' }
+    : personas[0]);
+  const menuUsers = knownPersona ? personas : [currentUser, ...personas];
 
   return (
     <div className="min-h-screen bg-[#ECEAE4] text-[#111827] flex flex-col font-sans selection:bg-[#FF4B63] selection:text-white">
@@ -131,7 +144,7 @@ export const PhoneFrame: React.FC<PhoneFrameProps> = ({
                 <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-stone-400">
                   Switch Persona
                 </div>
-                {users.map(u => (
+                {menuUsers.map(u => (
                   <button
                     key={u.id}
                     onClick={() => {
